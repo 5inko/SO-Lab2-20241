@@ -7,16 +7,17 @@
 #include <sys/stat.h>
 #include <string.h>
 
-//  Creación de una estructura vector para facilitar el trabajo
+// Definición de la estructura del vector
 #define VECTOR_CAPACITY 8
 
-typedef struct Vector{
+typedef struct {
     char **data;
     int capacity;
     int size;
 } Vector;
 
-Vector vector_create() {
+// Función para crear un vector
+Vector create_vector() {
     Vector v;
     v.data = (char**) malloc (VECTOR_CAPACITY * sizeof(char*));
     v.capacity = VECTOR_CAPACITY;
@@ -24,7 +25,8 @@ Vector vector_create() {
     return v;
 }
 
-void vector_add(Vector* v, char *str){
+// Función para agregar un elemento al vector
+void vector_append(Vector* v, char *str){
     if (v->capacity == v->size) {
         char** new_data = (char**) malloc( (v->capacity << 1) * sizeof(char*) );
         int n = v->size;
@@ -36,12 +38,14 @@ void vector_add(Vector* v, char *str){
     v->data[v->size++] = str;
 }
 
+// Función para obtener un elemento del vector por índice
 char *vector_get(Vector* v, int index){
     if (index < 0 || index >= v->size) return NULL;
     return v->data[index];
 }
 
-int vector_get_index(Vector *v, char *val){
+// Función para obtener el índice de un valor en el vector
+int vector_index(Vector *v, char *val){
     int n = v->size;
     for(int i = 0; i < n; i++){
         if (strcmp(val, v-> data[i]) == 0) return i;
@@ -49,18 +53,21 @@ int vector_get_index(Vector *v, char *val){
     return -1;
 }
 
+// Función para liberar la memoria utilizada por el vector
 void vector_destroy(Vector *v){
     free(v->data);
 }
 
+// Vector para almacenar los directorios de búsqueda del comando "path"
 Vector PATH;
 
-// Utility functions
+// Función para imprimir un mensaje de error
 void print_error(){
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO, error_message, strlen(error_message)); 
 }
 
+// Función para verificar si un carácter es un delimitador
 int is_delimiter(char c){
     if (c == ' ' ||  c == '\t' || c == '\n' || c == '>' || c == '&'){
         return 1;
@@ -68,26 +75,27 @@ int is_delimiter(char c){
     return 0;
 }
 
+// Función para analizar la entrada y dividirla en elementos
 Vector parse_input(char *expression){
-    Vector items = vector_create();
+    Vector items = create_vector();
 
-    int n = strlen(expression);
+    int len = strlen(expression);
     char* s = NULL;
     int start = -1;
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < len; i++) {
         if (expression[i] == '>') {
-            vector_add(&items, ">");
+            vector_append(&items, ">");
             continue;
         }
         if (expression[i] == '&') {
-            vector_add(&items, "&");
+            vector_append(&items, "&");
             continue;
         }
         if (!is_delimiter(expression[i])) {
             if (i == 0 || is_delimiter(expression[i-1])) start = i;
-            if (i == n-1 || is_delimiter(expression[i+1])) {
-                s = strndup(expression+start, i-start+1);
-                vector_add(&items, s);
+            if (i == len-1 || is_delimiter(expression[i+1])) {
+                s = strndup(expression + start, i - start + 1);
+                vector_append(&items, s);
             }
         }
     }
@@ -95,7 +103,7 @@ Vector parse_input(char *expression){
     return items;
 }
 
-// Handle commands functions
+// Función para manejar los comandos internos
 int handle_builtin_commands(Vector items){
     if (strcmp(vector_get(&items, 0), "exit") == 0){
         if(items.size > 1){
@@ -106,20 +114,17 @@ int handle_builtin_commands(Vector items){
         return 1;
     } else if (strcmp(vector_get(&items, 0), "cd") == 0) {
         if(chdir(vector_get(&items, 1)) != 0){
-            // Test 1 and 2: Input to check bad cd. No arguments or 2 arguments are passed to cd.
             print_error();
         }
         return 1;
     } else if (strcmp(vector_get(&items, 0), "path") == 0){
-        Vector new_path = vector_create();
+        Vector new_path = create_vector();
 
         for (int i = 1; i < items.size; i++){
             char* aux = (char*) malloc((strlen(vector_get(&items, i)) + strlen("/") + 1) * sizeof(char));
             strcpy(aux, vector_get(&items, i));
             strcat(aux, "/");
-
-            // Agregar el nuevo string a local_path
-            vector_add(&new_path, aux);
+            vector_append(&new_path, aux);
         }
 
         PATH = new_path;
@@ -128,9 +133,10 @@ int handle_builtin_commands(Vector items){
     return 0;
 }
 
+// Función para manejar los comandos externos
 int handle_external_commands(Vector items){
     char *command = vector_get(&items, 0);
-    int pos = vector_get_index(&items, ">");
+    int pos = vector_index(&items, ">");
     if (pos == -1) {
         pos = items.size;
     }
@@ -139,9 +145,9 @@ int handle_external_commands(Vector items){
         snprintf(dir, strlen(vector_get(&PATH, i)) + strlen(command) + 1, "%s%s", vector_get(&PATH, i), command);
         
         if (access(dir, X_OK) == 0) {
-            char* argv[pos+1];
-            for (int i = 0; i < pos; i++){
-                argv[i] = vector_get(&items, i);
+            char* argv[pos + 1];
+            for (int j = 0; j < pos; j++){
+                argv[j] = vector_get(&items, j);
             } 
             argv[pos] = NULL;
             
@@ -161,6 +167,7 @@ int handle_external_commands(Vector items){
     return -1;   
 }
 
+// Función para verificar si una redirección es válida
 int is_valid_redirection (Vector items) {
     int n = items.size;
     for (int i = 0; i < n; i++) {
@@ -176,6 +183,7 @@ int is_valid_redirection (Vector items) {
     return 1;
 }
 
+// Función principal
 int main(int argc, char *argv[]){
     int in_exec, full_cmd;
     Vector items, actual;
@@ -183,6 +191,7 @@ int main(int argc, char *argv[]){
 
     FILE *input_stream = NULL;
 
+    // Verificación de archivos de entrada
     for (int i = 1; i < argc; i++) {
         FILE* aux_file = fopen(argv[i], "r");
         if (aux_file == NULL) {
@@ -207,9 +216,10 @@ int main(int argc, char *argv[]){
         input_stream = stdin;
     }
 
-    vector_add(&PATH, "./");
-    vector_add(&PATH, "/usr/bin/");
-    vector_add(&PATH, "/bin/");
+    // Configuración inicial de PATH
+    vector_append(&PATH, "./");
+    vector_append(&PATH, "/usr/bin/");
+    vector_append(&PATH, "/bin/");
 
     while(1){
         // Verificar si estamos leyendo desde un archivo
@@ -237,14 +247,14 @@ int main(int argc, char *argv[]){
         // Cambiar el último caracter por NULL
         expression[in_len-1] = '\0';
 
-        // Separar la entrada en items
+        // Separar la entrada en elementos
         items = parse_input(expression);
 
         if(vector_get(&items, 0) == NULL){
             continue;
         }
  
-        actual = vector_create();
+        actual = create_vector();
 
         int pids[items.size];
         int pid_count = 0;
@@ -257,20 +267,17 @@ int main(int argc, char *argv[]){
                 while(!full_cmd && i < items.size){
                     pos_act = vector_get(&items, i);
                     if (strcmp(pos_act, "&") != 0){
-                        //printf("Añadiendo %s a actual\n", pos_act);
-                        vector_add(&actual, pos_act);
+                        vector_append(&actual, pos_act);
                         i++;
                     } else {
                         full_cmd = 1;
                     }
                 }
-                // Verificar si los items tienen una redireccion válida
+                // Verificar si los elementos tienen una redirección válida
                 if (is_valid_redirection(actual)) {
-                    // Intentar ejecutar un comando interno (revisar si es un comando interno)
+                    // Intentar ejecutar un comando interno
                     in_exec = handle_builtin_commands(actual);
-
-                        
-                    // En caso contrario intentar ejecutar un externo
+                    // En caso contrario, intentar ejecutar un comando externo
                     if(in_exec == 0){
                         pids[pid_count] = handle_external_commands(actual);
                         pid_count++;
@@ -279,9 +286,11 @@ int main(int argc, char *argv[]){
                     print_error();
                 }
                 full_cmd = 0;
-                actual = vector_create();
+                vector_destroy(&actual);
+                actual = create_vector();
             }
         }
+        // Esperar la finalización de los procesos hijos
         for(int i = 0; i < pid_count; i++){
             waitpid(pids[i], NULL, 0);
         }
